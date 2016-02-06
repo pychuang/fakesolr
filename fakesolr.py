@@ -3,12 +3,14 @@
 import argparse
 import hashlib
 import json
+import random
 import sys
 import urllib
 import urllib2
 import web
 
-SOLR_URL='http://localhost:8080/solr/citeseerx/select'
+#SOLR_URL='http://localhost:9000/solr/citeseerx/select'
+SOLR_URL='http://csxindex03.ist.psu.edu:8080/solr/citeseerx/select'
 OPENSEARCH_URL='http://localhost:5000'
 
 urls = (
@@ -19,9 +21,29 @@ urls = (
 class select:
     def GET(self):
         solrquery = web.input()
+        if 'start' in solrquery:
+            start = int(solrquery['start'])
+        else:
+            start = 0
+
+        if 'rows' in solrquery:
+            rows = int(solrquery['rows'])
+        else:
+            rows = 10
+
+        if start != 0:
+            solrquery['start'] = 0
+            solrquery['rows'] = start + rows
+
+        print solrquery
         solr_result = self.query_solr(solrquery)
+
+        #    response = solr_result['response']
+        #    rows = len(response['docs'])
+        #print 'ROWS', rows
+
         os_result = self.query_opensearch(solrquery)
-        return self.merge_results(solr_result, os_result)
+        return self.merge_results(solr_result, os_result, start, rows)
 
 
     def query_solr(self, solrquery):
@@ -30,6 +52,22 @@ class select:
         print "URL: %s" % url
         return json.load(urllib2.urlopen(url))
 
+    def query_solr_for_doi(self, doi):
+        f = {
+            'q': '*:*',
+            'wt': 'json',
+            'fq': 'doi:' + doi,
+        }
+        param = urllib.urlencode(f)
+        url = SOLR_URL + '?' + param
+        print "URL for %s: %s" % (doi, url)
+        solr_result = json.load(urllib2.urlopen(url))
+        response = solr_result['response']
+        docs = response['docs']
+        if not docs:
+            return None
+        else:
+            return docs[0]
 
     def cleanup(self, query):
         s = urllib.unquote_plus(query)
@@ -44,19 +82,105 @@ class select:
 
 
     def query_opensearch(self, solrquery):
+        key = web.ctx.key
+
         query = solrquery['q']
         query = self.cleanup(query)
         site_qid = self.generate_site_query_id(query)
-        key = web.ctx.key
 
         # GET /api/site/ranking/(key)/(site_qid)
         url = '/'.join([OPENSEARCH_URL, 'api/site/ranking', key, site_qid])
         print "URL: %s" % url
+        try:
+            return json.load(urllib2.urlopen(url))
+        except urllib2.URLError as e:
+            return {}
 
 
-    def merge_results(self, solr_result, os_result):
-        #return json.dumps(solr_result, indent=4, separators=(',', ': '))
-        return json.dumps(solr_result)
+    def fix_solr_result(self, solr_result, start, rows):
+        header = solr_result['responseHeader']
+        params =  header['params']
+        params['start'] = start
+        params['rows'] = rows
+
+        response = solr_result['response']
+        response['start'] = start
+        response['rows'] = rows
+        response['docs'] = response['docs'][start:start+rows]
+
+
+    def merge_doclists(self, solr_doclist, os_doclist, max_len):
+        # team draft interleaving algorithm
+        solr_docs_map = {doc['doi']: doc for doc in solr_doclist if 'doi' in doc}
+        os_doi_list = [doc['site_docid'] for doc in os_doclist]
+        new_doclist = []
+        solr_i = 0
+        os_i = 0
+        solr_team = []
+        os_team = []
+        selected= []
+        while len(new_doclist) < max_len:
+            if solr_i >= len(solr_doclist) and os_i >= len(os_doi_list):
+                break
+            if solr_i >= len(solr_doclist) or len(solr_team) > len(os_team):
+                solr_turn = False
+            elif os_i >= len(os_doi_list) or len(solr_team) < len(os_team):
+                solr_turn = True
+            else:
+                solr_turn = bool(random.getrandbits(1))
+
+            if solr_turn:
+                doc = solr_doclist[solr_i]
+                solr_i += 1
+                if 'doi' in doc:
+                    doi = doc['doi']
+                    if doi in selected:
+                        continue
+                    selected.append(doi)
+                    solr_team.append(doi)
+                    print "Solr pick (%s) %s" % (solr_i, doi)
+                else:
+                    # there should always be id field
+                    solr_team.append(doc['id'])
+                    print "Solr pick (%s) %s" % (solr_i, doc['id'])
+            else:
+                doi = os_doi_list[os_i]
+                os_i += 1
+                if doi in selected:
+                    continue
+
+                print "Open pick (%s) %s" % (os_i, doi)
+                selected.append(doi)
+                os_team.append(doi)
+                if doi in solr_docs_map:
+                    doc = solr_docs_map[doi]
+                else:
+                    print 'need to query solr for doi', doi
+                    doc = self.query_solr_for_doi(doi)
+                    if not doc:
+                        print 'OpenSearch picked', doi, 'not foudn in solr (weird)'
+                        continue
+            new_doclist.append(doc)
+        return new_doclist
+
+    def json_dumps(self, data):
+        return json.dumps(data, indent=4, separators=(',', ': '))
+        return json.dumps(data)
+
+
+    def merge_results(self, solr_result, os_result, start, rows):
+        if not os_result:
+            print 'OpenSearch: not found'
+            self.fix_solr_result(solr_result, start, rows)
+            return self.json_dumps(solr_result)
+
+        response = solr_result['response']
+        solr_doclist = response['docs']
+        os_doclist = os_result['doclist']
+        response['docs'] = self.merge_doclists(solr_doclist, os_doclist, start+rows)
+
+        self.fix_solr_result(solr_result, start, rows)
+        return self.json_dumps(solr_result)
 
 
 class MyApplication(web.application):

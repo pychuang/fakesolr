@@ -109,6 +109,12 @@ class select:
         response['docs'] = response['docs'][start:start+rows]
 
 
+    def assign_default_team(self, solr_result):
+        response = solr_result['response']
+        for doc in response['docs']:
+            doc['team'] = 's'
+
+
     def merge_doclists(self, solr_doclist, os_doclist, max_len):
         # team draft interleaving algorithm
         solr_docs_map = {doc['doi']: doc for doc in solr_doclist if 'doi' in doc}
@@ -143,6 +149,7 @@ class select:
                     # there should always be id field
                     solr_team.append(doc['id'])
                     print "Solr pick (%s) %s" % (solr_i, doc['id'])
+                doc['team'] = 's'
             else:
                 doi = os_doi_list[os_i]
                 os_i += 1
@@ -160,8 +167,10 @@ class select:
                     if not doc:
                         print 'OpenSearch picked', doi, 'not foudn in solr (weird)'
                         continue
+                doc['team'] = 'p'
             new_doclist.append(doc)
         return new_doclist
+
 
     def json_dumps(self, data):
         return json.dumps(data, indent=4, separators=(',', ': '))
@@ -171,13 +180,16 @@ class select:
     def merge_results(self, solr_result, os_result, start, rows):
         if not os_result:
             print 'OpenSearch: not found'
+            self.assign_default_team(solr_result)
             self.fix_solr_result(solr_result, start, rows)
             return self.json_dumps(solr_result)
 
         response = solr_result['response']
         solr_doclist = response['docs']
         os_doclist = os_result['doclist']
+        os_sid = os_result['sid']
         response['docs'] = self.merge_doclists(solr_doclist, os_doclist, start+rows)
+        response['ossid'] = os_sid
 
         self.fix_solr_result(solr_result, start, rows)
         return self.json_dumps(solr_result)

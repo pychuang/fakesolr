@@ -112,7 +112,7 @@ class select:
     def assign_default_team(self, solr_result):
         response = solr_result['response']
         for doc in response['docs']:
-            doc['team'] = 's'
+            doc['team'] = 'd'
 
 
     def merge_doclists(self, solr_doclist, os_doclist, max_len):
@@ -125,6 +125,17 @@ class select:
         solr_team = []
         os_team = []
         selected= []
+        while solr_i < len(solr_doclist):
+            doc = solr_doclist[solr_i]
+            if 'doi' not in doc:
+                break
+            if doc['doi'] != os_doi_list[os_i]:
+                break
+            doc['team'] = 'x'
+            new_doclist.append(doc)
+            solr_i += 1
+            os_i += 1
+
         while len(new_doclist) < max_len:
             if solr_i >= len(solr_doclist) and os_i >= len(os_doi_list):
                 break

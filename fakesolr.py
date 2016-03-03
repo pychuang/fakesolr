@@ -108,6 +108,7 @@ class select:
         try:
             return json.load(urllib2.urlopen(url))
         except urllib2.URLError as e:
+            print 'OpenSearch: not found'
             return {}
 
 
@@ -204,7 +205,6 @@ class select:
 
     def merge_results(self, solr_result, os_result, start, rows):
         if not os_result:
-            print 'OpenSearch: not found'
             self.assign_default_team(solr_result)
             self.fix_solr_result(solr_result, start, rows)
             return self.json_dumps(solr_result)
@@ -242,13 +242,13 @@ def global_variable_processor(handler):
 if __name__ == "__main__":
     config = ConfigParser.ConfigParser()
     config.read('config.ini')
+    port = config.getint('fakesolr', 'port')
     solr_url = config.get('solr', 'url')
     opensearch_url = config.get('opensearch', 'url')
     opensearch_key = config.get('opensearch', 'key')
 
     parser = argparse.ArgumentParser(description='Integrate query results of Solr and TREC OpenSearch and act like a Solr server.')
     parser.add_argument('-q', '--queries_file', help='specify queries file')
-    parser.add_argument('port', type=int, help='Port number')
 
     args = parser.parse_args()
     if args.queries_file:
@@ -256,4 +256,4 @@ if __name__ == "__main__":
 
     app = MyApplication(urls, globals())
     app.add_processor(global_variable_processor)
-    app.run(port=args.port)
+    app.run(port)

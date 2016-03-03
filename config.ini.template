@@ -1,3 +1,6 @@
+[fakesolr]
+port: 8888
+
 [solr]
 url: http://localhost:8080/solr/citeseerx/select
 

@@ -224,11 +224,10 @@ if __name__ == "__main__":
     print sys.argv
     parser = argparse.ArgumentParser(description='Integrate query results of Solr and TREC OpenSearch and act like a Solr server.')
     parser.add_argument('-k', '--key', type=str, required=True, help='Provide a user key.')
-    parser.add_argument('port', help='Port number')
+    parser.add_argument('port', type=int, help='Port number')
 
     args = parser.parse_args()
     KEY = args.key
-    port = int(args.port)
     app = MyApplication(urls, globals())
     app.add_processor(global_variable_processor)
-    app.run(port=port)
+    app.run(port=args.port)

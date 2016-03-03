@@ -10,8 +10,7 @@ import urllib2
 import web
 
 
-#SOLR_URL='http://localhost:9000/solr/citeseerx/select'
-SOLR_URL='http://csxindex03.ist.psu.edu:8080/solr/citeseerx/select'
+SOLR_URL='http://localhost:9000/solr/citeseerx/select'
 OPENSEARCH_URL='http://localhost:5000'
 
 urls = (

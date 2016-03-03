@@ -9,6 +9,7 @@ import urllib
 import urllib2
 import web
 
+
 #SOLR_URL='http://localhost:9000/solr/citeseerx/select'
 SOLR_URL='http://csxindex03.ist.psu.edu:8080/solr/citeseerx/select'
 OPENSEARCH_URL='http://localhost:5000'
@@ -16,6 +17,20 @@ OPENSEARCH_URL='http://localhost:5000'
 urls = (
   '/select', 'select'
 )
+
+
+def generate_site_query_id(query):
+    return hashlib.sha1(query).hexdigest()
+
+
+def process_queries_file(queries_file):
+    qids = set()
+    with open(queries_file) as f:
+        for line in f:
+            query = line.strip()
+            qid = generate_site_query_id(query)
+            qids.add(qid)
+    return qids
 
 
 class select:
@@ -77,16 +92,16 @@ class select:
         return s
 
 
-    def generate_site_query_id(self, query):
-        return hashlib.sha1(query).hexdigest()
-
-
     def query_opensearch(self, solrquery):
         key = web.ctx.key
+        qids = web.ctx.qids
 
         query = solrquery['q']
         query = self.cleanup(query)
-        site_qid = self.generate_site_query_id(query)
+        site_qid = generate_site_query_id(query)
+
+        if qids is not None and site_qid not in qids:
+            return {}
 
         # GET /api/site/ranking/(key)/(site_qid)
         url = '/'.join([OPENSEARCH_URL, 'api/site/ranking', key, site_qid])
@@ -213,20 +228,25 @@ class MyApplication(web.application):
 
 
 KEY=''
+qids = None
 
 
 def global_variable_processor(handler):
     web.ctx.key = KEY
+    web.ctx.qids = qids
     return handler()
 
 
 if __name__ == "__main__":
-    print sys.argv
     parser = argparse.ArgumentParser(description='Integrate query results of Solr and TREC OpenSearch and act like a Solr server.')
+    parser.add_argument('-q', '--queries_file', help='specify queries file')
     parser.add_argument('-k', '--key', type=str, required=True, help='Provide a user key.')
     parser.add_argument('port', type=int, help='Port number')
 
     args = parser.parse_args()
+    if args.queries_file:
+        qids = process_queries_file(args.queries_file)
+
     KEY = args.key
     app = MyApplication(urls, globals())
     app.add_processor(global_variable_processor)

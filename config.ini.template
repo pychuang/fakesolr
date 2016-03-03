@@ -1,0 +1,6 @@
+[solr]
+url: http://localhost:8080/solr/citeseerx/select
+
+[opensearch]
+url: http://localhost:5000
+key: E0016261DE4C0D61-M6C4AMHHE4WV4OVY

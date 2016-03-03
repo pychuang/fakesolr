@@ -1,6 +1,7 @@
 #!/usr/bin/python
 
 import argparse
+import ConfigParser
 import hashlib
 import json
 import random
@@ -9,9 +10,6 @@ import urllib
 import urllib2
 import web
 
-
-SOLR_URL='http://localhost:9000/solr/citeseerx/select'
-OPENSEARCH_URL='http://localhost:5000'
 
 urls = (
   '/select', 'select'
@@ -34,6 +32,11 @@ def process_queries_file(queries_file):
 
 class select:
     def GET(self):
+        self.qids = web.ctx.qids
+        self.solr_url = web.ctx.solr_url
+        self.opensearch_url = web.ctx.opensearch_url
+        self.opensearch_key = web.ctx.opensearch_key
+
         solrquery = web.input()
         if 'start' in solrquery:
             start = int(solrquery['start'])
@@ -62,7 +65,7 @@ class select:
 
     def query_solr(self, solrquery):
         params = urllib.urlencode(solrquery)
-        url = SOLR_URL + '?' + params
+        url = self.solr_url + '?' + params
         print "URL: %s" % url
         return json.load(urllib2.urlopen(url))
 
@@ -73,7 +76,7 @@ class select:
             'fq': 'doi:' + doi,
         }
         param = urllib.urlencode(f)
-        url = SOLR_URL + '?' + param
+        url = self.solr_url + '?' + param
         print "URL for %s: %s" % (doi, url)
         solr_result = json.load(urllib2.urlopen(url))
         response = solr_result['response']
@@ -92,18 +95,15 @@ class select:
 
 
     def query_opensearch(self, solrquery):
-        key = web.ctx.key
-        qids = web.ctx.qids
-
         query = solrquery['q']
         query = self.cleanup(query)
         site_qid = generate_site_query_id(query)
 
-        if qids is not None and site_qid not in qids:
+        if self.qids is not None and site_qid not in self.qids:
             return {}
 
         # GET /api/site/ranking/(key)/(site_qid)
-        url = '/'.join([OPENSEARCH_URL, 'api/site/ranking', key, site_qid])
+        url = '/'.join([self.opensearch_url, 'api/site/ranking', self.opensearch_key, site_qid])
         print "URL: %s" % url
         try:
             return json.load(urllib2.urlopen(url))
@@ -226,27 +226,34 @@ class MyApplication(web.application):
         return web.httpserver.runsimple(func, ('0.0.0.0', port))
 
 
-KEY=''
 qids = None
-
+solr_url = ''
+opensearch_url = ''
+opensearch_key = ''
 
 def global_variable_processor(handler):
-    web.ctx.key = KEY
     web.ctx.qids = qids
+    web.ctx.solr_url = solr_url
+    web.ctx.opensearch_url = opensearch_url
+    web.ctx.opensearch_key = opensearch_key
     return handler()
 
 
 if __name__ == "__main__":
+    config = ConfigParser.ConfigParser()
+    config.read('config.ini')
+    solr_url = config.get('solr', 'url')
+    opensearch_url = config.get('opensearch', 'url')
+    opensearch_key = config.get('opensearch', 'key')
+
     parser = argparse.ArgumentParser(description='Integrate query results of Solr and TREC OpenSearch and act like a Solr server.')
     parser.add_argument('-q', '--queries_file', help='specify queries file')
-    parser.add_argument('-k', '--key', type=str, required=True, help='Provide a user key.')
     parser.add_argument('port', type=int, help='Port number')
 
     args = parser.parse_args()
     if args.queries_file:
         qids = process_queries_file(args.queries_file)
 
-    KEY = args.key
     app = MyApplication(urls, globals())
     app.add_processor(global_variable_processor)
     app.run(port=args.port)

@@ -66,7 +66,7 @@ class select:
     def query_solr(self, solrquery):
         params = urllib.urlencode(solrquery)
         url = self.solr_url + '?' + params
-        print "URL: %s" % url
+        print "Query Solr:\t\t%s" % url
         return json.load(urllib2.urlopen(url))
 
     def query_solr_for_doi(self, doi):
@@ -77,7 +77,7 @@ class select:
         }
         param = urllib.urlencode(f)
         url = self.solr_url + '?' + param
-        print "URL for %s: %s" % (doi, url)
+        print "Query Solr for %s:\t%s" % (doi, url)
         solr_result = json.load(urllib2.urlopen(url))
         response = solr_result['response']
         docs = response['docs']
@@ -104,7 +104,7 @@ class select:
 
         # GET /api/site/ranking/(key)/(site_qid)
         url = '/'.join([self.opensearch_url, 'api/site/ranking', self.opensearch_key, site_qid])
-        print "URL: %s" % url
+        print "Query OpenSearch:\t%s" % url
         try:
             return json.load(urllib2.urlopen(url))
         except urllib2.URLError as e:
@@ -188,7 +188,6 @@ class select:
                 if doi in solr_docs_map:
                     doc = solr_docs_map[doi]
                 else:
-                    print 'need to query solr for doi', doi
                     doc = self.query_solr_for_doi(doi)
                     if not doc:
                         print 'OpenSearch picked', doi, 'not foudn in solr (weird)'

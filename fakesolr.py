@@ -64,7 +64,8 @@ class select:
 
 
     def query_solr(self, solrquery):
-        params = urllib.urlencode(solrquery)
+        solrquery_utf8 = dict([k, v.encode('utf-8')] for k, v in solrquery.items())
+        params = urllib.urlencode(solrquery_utf8)
         url = self.solr_url + '?' + params
         print "Query Solr:\t\t%s" % url
         return json.load(urllib2.urlopen(url))
@@ -97,6 +98,7 @@ class select:
     def query_opensearch(self, solrquery):
         query = solrquery['q']
         query = self.cleanup(query)
+        query = query.encode('utf-8')
         site_qid = generate_site_query_id(query)
 
         if self.qids is not None and site_qid not in self.qids:

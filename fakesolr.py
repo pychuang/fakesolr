@@ -64,8 +64,11 @@ class select:
 
 
     def query_solr(self, solrquery):
-        solrquery_utf8 = dict([k, v.encode('utf-8')] for k, v in solrquery.items())
-        params = urllib.urlencode(solrquery_utf8)
+        if 'q' in solrquery:
+            query = solrquery['q']
+            query = query.encode('utf-8')
+            solrquery['q'] = query
+        params = urllib.urlencode(solrquery)
         url = self.solr_url + '?' + params
         print "Query Solr:\t\t%s" % url
         return json.load(urllib2.urlopen(url))

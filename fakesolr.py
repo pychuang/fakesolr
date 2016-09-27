@@ -92,9 +92,13 @@ class select:
 
     def cleanup(self, query):
         s = urllib.unquote_plus(query)
-        s = ' '.join(s.split(','))
-        s = ' '.join(s.split())
         s = s.lower()
+        s = ' '.join(s.split(','))
+        s = ' '.join(s.split('"'))
+        s = ' '.join(s.split(';'))
+        s  = re.sub(r"'([^s]|$)", r'\1', s)
+        s  = re.sub(r"(^|\D)\.+", r"\1 ", s)
+        s = ' '.join(s.split())
         return s
 
 

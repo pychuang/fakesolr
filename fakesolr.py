@@ -5,6 +5,7 @@ import ConfigParser
 import hashlib
 import json
 import random
+import re
 import sys
 import urllib
 import urllib2
